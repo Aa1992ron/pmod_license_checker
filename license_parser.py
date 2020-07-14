@@ -14,87 +14,95 @@ def main():
                                     usage="%(prog)s [options]")
     parser.add_argument('--cli',dest="cli_mode", action="store_true",
                          required=False, help=MODESELECT_HELPTEXT)
-
     parser.set_defaults(cli_mode=False)
+    #get command line args, if there are any passed
     args = parser.parse_args()
-
     cli_mode = args.cli_mode
 
+    #attempt to get a list of every perl module installed:
+    PERLMOD_DUMPFILE = "pmlist_temp.out"
+    #try to output the perl module list to a temp file
+    os_status = os.system("cpan -l > "+PERLMOD_DUMPFILE)
+    #check to make sure the command worked
+    if os_status == 1:
+        print("Failed to get a list of perl modules installed: cpan -l cmd failed\n")
+        exit(1)
+
     if cli_mode:
-        print("cli mode selected")
-        exit(0)
+        print("--- running in terminal mode ---")
+        with open(PERLMOD_DUMPFILE) as mod_listfile:
+            mod_listfile.readline()
+            for line in mod_listfile:
+                #parse the name of this perl module from the line
+                pmod_name = parse_pmod_name(line)
+                #run our manual check and get a result to print out
+                #for this module
+                #this will be in csv format -- Module::Name,[free/proprietary?]
+                parse_result = pmodfile_manual_parse(pmod_name)
+                if parse_result is None:
+                    pass
+                else:
+                    print(parse_result)
+        #Now that we're done going through all those modules, delete the temp file
+        os.remove(PERLMOD_DUMPFILE)
     else:
         print("gui mode selected")
         #run gui mode
-        exit(0)
+    
+    return 0
 
+
+#EFFECTS: Runs a simple manual parse to determine license data. 
+#           for right now, it only checks the first 25 lines of the 
+#           given perl module file to determine this license data. 
+#           More functionality to be added soon
+#NOTES: additional checks we could do
+#       check the perldoc(?) for license info
+#       if this cannot be done, we may have to resort to  reverse read
+def pmodfile_manual_parse(pmod_name):
     NUM_LINES2SCAN = 25
-    PERLMOD_DUMPFILE = "pmlist_temp.out"
+    printout_retval = ""
 
-    #try to output the perl module list to a temp file
-    os_status = os.system("cpan -l > "+PERLMOD_DUMPFILE)
-    if os_status is 1:
-        print("cpan -l command failed in get_modulelist")
-        exit(1)
+    ostream = os.popen("perldoc -lm "+pmod_name+" 2>&1")
+    #get the fully qualified filename from the above command
+    module_filename = ostream.read()
 
-    with open(PERLMOD_DUMPFILE) as mod_listfile:
-        mod_listfile.readline()
-        for line in mod_listfile:
-            #we don't care about the version of the module,
-            # so we'll strip it out for now
-            module = line.split("\t")
-            #Grab the name of this perl module
-            pmod_name = str(module[0])
-            #print("****"+str(module[0]))
-            ostream = os.popen("perldoc -lm "+pmod_name+" 2>&1")
-            #get the location of this module's perl code
-            module_filename = ostream.read()
-            #If the perldoc command was successful, the first character
-            # of the output will be the root path character 
-            if module_filename[0] is "N":
-                pass
-            #strip the newline character from the output of the command
-            module_filename = module_filename.rstrip("\n")
-            print(pmod_name+", ")
-            #the .pm file can be ascii/utf-8/etc, so we want to detect 
-            #the charset before opening the file
-            this_charset = which_charset(module_filename)
+    #If the perldoc command was successful, the first character
+    # of the output will be the root path character 
+    if module_filename[0] == "N":
+        return None
+    #strip the newline character from the output of the command
+    module_filename = module_filename.rstrip("\n")
+    printout_retval = pmod_name+", "
+    #the .pm file can be ascii/utf-8/etc, so we want to detect 
+    #the charset before opening the file
+    this_charset = which_charset(module_filename)
+    #scan the file for license info
+    perl_modfile = open(module_filename, 'r' ,encoding=this_charset)
+    is_openlicense = False
+    #for now, we'll just scan the first 25 lines of the file
+    for i in range(NUM_LINES2SCAN):
+        if perl_modfile.read(1) != "#":
+            pass
+        if line_check(perl_modfile.read()):
+            #as in freedom
+            printout_retval += "free"
+            return printout_retval
+    #if the loop didn't find the keywords which signal a free license,
+    # warn users that it may be a proprietary license
+    if not is_openlicense:
+        printout_retval += "proprietary?"
+        return printout_retval
 
-            #scan the file for license info
-            perl_modfile = open(module_filename, 'r' ,encoding=this_charset)
-            is_openlicense = False
-            #for now, we'll just scan the first 25 lines of the file
-            for i in range(NUM_LINES2SCAN):
-                if perl_modfile.read(1) is not "#":
-                    pass
-                if line_check(perl_modfile.read()):
-                    #as in freedom
-                    print("free\n")
-                    is_openlicense = True
-                    break
+#EFFECTS: parse out the name of a perl module from a single line of output
+#           from the command cpan -l
+def parse_pmod_name(raw_line):
+    #we don't care about the version of the module,
+    # so we'll strip it out for now
+    module = raw_line.split("\t")
+    #Grab the name of this perl module and return it
+    return str(module[0])
 
-            #check the perldoc(?) for license info
-
-            #if this cannot be done, we may have to resort to  reverse read
-
-
-            #if the loop didn't find the keywords which signal a free license,
-            # warn users that it may be a proprietary license
-            if not is_openlicense:
-                print("proprietary?\n")
-
-
-
-    os.remove(PERLMOD_DUMPFILE)
-    #First, we'll try and narrow down license comments that differ from the following:
-    #module_filename = module_filename.rstrip("\n")
-    # This program is free software; you can redistribute it and/or
-    # modify it under the same terms as Perl itself.
-    #perl_modfile = open(module_filename, "r")
-
-    #for i in range(NUM_LINES2SCAN):
-        #if line_check(perl_modfile.readline()):
-            #print("Licensed as free software")
 
 #REQUIRES:  perl_module is a file denoted with an absolute path.
 #           If you didn't also guess by the name, it should also be 
