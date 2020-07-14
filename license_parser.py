@@ -1,6 +1,10 @@
 #!/usr/bin/python3
 import os
 import argparse
+#GTK+ imports
+import gi
+gi.require_version("Gtk", "3.0")
+from gi.repository import Gtk
 
 #from file_read_backwards import FileReadBackwards 
 
@@ -29,6 +33,7 @@ def main():
         exit(1)
 
     if cli_mode:
+        #CLI MODE BELOW -------------------------------------------------------
         print("--- running in terminal mode ---")
         with open(PERLMOD_DUMPFILE) as mod_listfile:
             mod_listfile.readline()
@@ -45,9 +50,17 @@ def main():
                     print(parse_result)
         #Now that we're done going through all those modules, delete the temp file
         os.remove(PERLMOD_DUMPFILE)
-    else:
-        print("gui mode selected")
-        #run gui mode
+        #----------------------------------------------------------------------
+    else: 
+        print("--- running in gui mode ---")
+        #GUI MODE BELOW -------------------------------------------------------
+        win = Gtk.Window()
+        win.connect("destroy", Gtk.main_quit)
+        win.show_all()
+        Gtk.main()
+        #process the modules in windowed mode here
+        os.remove(PERLMOD_DUMPFILE)
+        #----------------------------------------------------------------------
     
     return 0
 
