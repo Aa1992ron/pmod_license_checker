@@ -1,8 +1,33 @@
+#!/usr/bin/python3
 import os
+import argparse
 
 #from file_read_backwards import FileReadBackwards 
 
+
 def main():
+    #Help text for command line args
+    MODESELECT_HELPTEXT = "Run this program in command-line mode. "
+    MODESELECT_HELPTEXT += "Program runs in windowed mode by default."
+
+    parser = argparse.ArgumentParser(prog="license_parser.py", 
+                                    usage="%(prog)s [options]")
+    parser.add_argument('--cli',dest="cli_mode", action="store_true",
+                         required=False, help=MODESELECT_HELPTEXT)
+
+    parser.set_defaults(cli_mode=False)
+    args = parser.parse_args()
+
+    cli_mode = args.cli_mode
+
+    if cli_mode:
+        print("cli mode selected")
+        exit(0)
+    else:
+        print("gui mode selected")
+        #run gui mode
+        exit(0)
+
     NUM_LINES2SCAN = 25
     PERLMOD_DUMPFILE = "pmlist_temp.out"
 
@@ -31,8 +56,8 @@ def main():
             #strip the newline character from the output of the command
             module_filename = module_filename.rstrip("\n")
             print(pmod_name+", ")
-            #the .pm file can be ascii/utf-8/etc, so we want to detect the charset
-            # before opening the file
+            #the .pm file can be ascii/utf-8/etc, so we want to detect 
+            #the charset before opening the file
             this_charset = which_charset(module_filename)
 
             #scan the file for license info
@@ -88,7 +113,8 @@ def line_check(line):
     else:
         return False
 
-    
+
+
 if __name__ == "__main__":
 	main()
 
