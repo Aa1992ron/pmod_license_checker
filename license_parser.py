@@ -57,6 +57,15 @@ def main():
         win = Gtk.Window()
         win.connect("destroy", Gtk.main_quit)
         win.show_all()
+        #Usually, you'll want to use Glade to build the interfaces 
+        # Glade generates an xml file that we can load like so
+        #builder = Gtk.Builder()
+        #builder.add_from_file("example.glade")
+        #window = builder.get_object("start_window")
+        #window.show_all()
+
+        #alternatively, you can traverse a list of objects --
+        #glade_object_list = builder.get_objects()
         Gtk.main()
         #process the modules in windowed mode here
         os.remove(PERLMOD_DUMPFILE)
