@@ -1,0 +1,24 @@
+#footer_bar {
+	background-color: #333333;
+}
+
+#quit_btn:hover:active {
+	background: red;
+}
+
+#quit_btn {
+	border-color: #111111;
+	color: white;
+	background: #b22222;
+}
+
+
+#first_scrn_next_btn:hover:active {
+	background: green;
+}
+
+#first_scrn_next_btn {
+	border-color: #111111;
+	color: white;
+	background: #006400;
+}

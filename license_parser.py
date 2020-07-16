@@ -1,10 +1,10 @@
 #!/usr/bin/python3
-import os
 import argparse
-#GTK+ imports
-import gi
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk
+#to cut down on repeated imports, common imports and global
+#variables are in a seperate file -- global_definitions.py
+from global_definitions import *
+#custom gtk helper functions import:
+from gtk_helpers import style_init
 
 #from file_read_backwards import FileReadBackwards 
 
@@ -54,15 +54,17 @@ def main():
     else: 
         print("--- running in gui mode ---")
         #GUI MODE BELOW -------------------------------------------------------
-        win = Gtk.Window()
-        win.connect("destroy", Gtk.main_quit)
-        win.show_all()
+        #win = Gtk.Window()
+        #win.connect("destroy", Gtk.main_quit)
+        #win.show_all()
         #Usually, you'll want to use Glade to build the interfaces 
         # Glade generates an xml file that we can load like so
-        #builder = Gtk.Builder()
-        #builder.add_from_file("example.glade")
-        #window = builder.get_object("start_window")
-        #window.show_all()
+        style_init()
+        builder = Gtk.Builder()
+        builder.add_from_file("lchecker.glade")
+        window = builder.get_object("first_screen")
+        window.connect("destroy", Gtk.main_quit)
+        window.show_all()
 
         #alternatively, you can traverse a list of objects --
         #glade_object_list = builder.get_objects()
@@ -142,7 +144,6 @@ def line_check(line):
         return True
     else:
         return False
-
 
 
 if __name__ == "__main__":
