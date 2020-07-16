@@ -27,6 +27,7 @@ def main():
 
     # Connect our handler for interrupt and terminate signals ,
     # since we have a temporary file we don't want to leave behind
+    signal.signal(signal.SIGSEGV, exit_gracefully)
     signal.signal(signal.SIGHUP, exit_gracefully)
     signal.signal(signal.SIGINT, exit_gracefully)
     signal.signal(signal.SIGTERM, exit_gracefully)
