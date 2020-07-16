@@ -6,7 +6,7 @@ import argparse
 #variables are in a seperate file -- global_definitions.py
 from global_definitions import *
 #custom gtk helper functions import:
-from gtk_helpers import style_init
+from gtk_helpers import *
 
 #from file_read_backwards import FileReadBackwards 
 
@@ -25,7 +25,12 @@ def main():
     args = parser.parse_args()
     cli_mode = args.cli_mode
 
-    # Connect our handler for interrupt and terminate signals ,
+
+    #Not sure if we'll need to handle a SIGABRT, but uncommenting
+    # the line will make you SUPER SAFE
+    #signal.signal(signal.SIGABRT, exit_gracefully)
+
+    # Connect our handler for hangup, interrupt and terminate signals ,
     # since we have a temporary file we don't want to leave behind
     signal.signal(signal.SIGSEGV, exit_gracefully)
     signal.signal(signal.SIGHUP, exit_gracefully)
@@ -51,6 +56,8 @@ def main():
                 #this will be in csv format -- Module::Name,[free/proprietary?]
                 parse_result = pmodfile_manual_parse(pmod_name)
                 if parse_result is None:
+                    #in this case, an erroneous line of output was passed
+                    # to perldoc -lm. 
                     pass
                 else:
                     print(parse_result)
@@ -69,7 +76,13 @@ def main():
         builder = Gtk.Builder()
         builder.add_from_file("lchecker.glade")
         window = builder.get_object("first_screen")
-        window.connect("destroy", Gtk.main_quit)
+
+        #connect our callback functions to the names specified in Glade
+        # (names must be an exact match). These functions are defined in
+        # gtk_helpers.py
+        builder.connect_signals({"destroy": Gtk.main_quit,
+                                 "quit_btn_cb": quit_btn_cb})
+
         window.show_all()
 
         #alternatively, you can traverse a list of objects --

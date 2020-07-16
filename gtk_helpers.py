@@ -10,3 +10,6 @@ def style_init():
                                         Gtk.STYLE_PROVIDER_PRIORITY_USER)
     return
 
+
+def quit_btn_cb(quit_btn):
+    Gtk.main_quit()

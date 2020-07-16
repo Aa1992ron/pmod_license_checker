@@ -27,6 +27,7 @@
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
                 <property name="halign">start</property>
+                <signal name="clicked" handler="quit_btn_cb" swapped="no"/>
               </object>
               <packing>
                 <property name="expand">False</property>
