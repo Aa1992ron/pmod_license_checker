@@ -12,6 +12,8 @@ sudo apt-get install gtk+-3
 ---------------------------------------------------------------
 Step 2: install Glade, the gui editor for gtk+
 ---------------------------------------------------------------
+NOTE: this step is not required if you do not wish to edit the 
+	.glade file this program uses.
 
 SUSE: 
 $ zypper install glade
@@ -35,9 +37,8 @@ Debian
 $ sudo apt-get install gobject-introspection
 
 ---------------------------------------------------------------
-step 4: Run starter.py
+step 4: Run the program 
 ---------------------------------------------------------------
 
-$ python3 starter.py
+$ python3 license_parser.py
 
-This should spawn a small, blank window.  From here, you can create your own interface using glade, and create the 'controller' for your windowed program in python!
