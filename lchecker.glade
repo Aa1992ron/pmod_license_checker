@@ -100,7 +100,10 @@
 license checker utility.  This 
 utility will generate a csv report
 of each module and whether it
-has a free or proprietary license.</property>
+has a free or proprietary license.
+By default this report is saved as
+~/pmod_report.csv  -- but you can
+change this.</property>
                 <attributes>
                   <attribute name="font-desc" value="FreeMono Bold 12"/>
                 </attributes>
