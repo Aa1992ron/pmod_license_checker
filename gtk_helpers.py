@@ -13,3 +13,15 @@ def style_init():
 
 def quit_btn_cb(quit_btn):
     Gtk.main_quit()
+
+def next_btn_cb(next_btn, builder):
+	win2hide = next_btn.get_toplevel()
+	win2hide.hide()
+	summary_screen = builder.get_object("summary_screen")
+	summary_screen.show()
+
+def back_btn_cb(back_btn, builder):
+	win2hide = back_btn.get_toplevel()
+	win2hide.hide()
+	summary_screen = builder.get_object("first_screen")
+	summary_screen.show()

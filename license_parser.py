@@ -81,7 +81,9 @@ def main():
         # (names must be an exact match). These functions are defined in
         # gtk_helpers.py
         builder.connect_signals({"destroy": Gtk.main_quit,
-                                 "quit_btn_cb": quit_btn_cb})
+                                 "quit_btn_cb": quit_btn_cb,
+                                 "next_btn_cb": (next_btn_cb, builder), 
+                                 "back_btn_cb": (back_btn_cb, builder)})
 
         window.show_all()
 

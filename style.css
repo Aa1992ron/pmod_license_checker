@@ -1,3 +1,19 @@
+#begin_win {
+	background-color: #333444;
+}
+
+#summary_of_job {
+	background-color: #333444;
+}
+
+#are_you_sure {
+	color: red;
+}
+
+#intro_text {
+	color: white;
+}
+
 #footer_bar {
 	background-color: #333333;
 }
