@@ -1,5 +1,5 @@
 ### The Perl Module License Checker
-Created to help figure out if your perl environment includes any modules which have proprietary licensing.  
+Created to help figure out if your perl environment includes any modules which have proprietary licensing. PLEASE NOTE that this program is currently only built to support Linux operating systems. Changes to system calls would have to be made for Windows compatibility.   
 
 #### Usage:
 Run the program in windowed mode (currently under development)
