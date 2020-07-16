@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+import signal
+import sys
 import argparse
 #to cut down on repeated imports, common imports and global
 #variables are in a seperate file -- global_definitions.py
@@ -23,9 +25,11 @@ def main():
     args = parser.parse_args()
     cli_mode = args.cli_mode
 
+    # Connect our handler for interrupt and terminate signals ,
+    # since we have a temporary file we don't want to leave behind
+    signal.signal(signal.SIGINT, exit_gracefully)
+    signal.signal(signal.SIGTERM, exit_gracefully)
     #attempt to get a list of every perl module installed:
-    PERLMOD_DUMPFILE = "pmlist_temp.out"
-    #try to output the perl module list to a temp file
     os_status = os.system("cpan -l > "+PERLMOD_DUMPFILE)
     #check to make sure the command worked
     if os_status == 1:
@@ -145,6 +149,9 @@ def line_check(line):
     else:
         return False
 
+def exit_gracefully(sig, frame):
+    os.remove(PERLMOD_DUMPFILE)
+    exit(0)
 
 if __name__ == "__main__":
 	main()
