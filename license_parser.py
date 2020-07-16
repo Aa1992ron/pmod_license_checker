@@ -16,7 +16,7 @@ def main():
     MODESELECT_HELPTEXT = "Run this program in command-line mode. "
     MODESELECT_HELPTEXT += "Program runs in windowed mode by default."
 
-    parser = argparse.ArgumentParser(prog="license_parser.py", 
+    parser = argparse.ArgumentParser(prog="python3 license_parser.py", 
                                     usage="%(prog)s [options]")
     parser.add_argument('--cli',dest="cli_mode", action="store_true",
                          required=False, help=MODESELECT_HELPTEXT)
@@ -27,6 +27,7 @@ def main():
 
     # Connect our handler for interrupt and terminate signals ,
     # since we have a temporary file we don't want to leave behind
+    signal.signal(signal.SIGHUP, exit_gracefully)
     signal.signal(signal.SIGINT, exit_gracefully)
     signal.signal(signal.SIGTERM, exit_gracefully)
     #attempt to get a list of every perl module installed:
