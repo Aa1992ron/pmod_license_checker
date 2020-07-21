@@ -2,6 +2,8 @@
 import signal
 import sys
 import argparse
+import subprocess
+from subprocess import PIPE
 #to cut down on repeated imports, common imports and global
 #variables are in a seperate file -- global_definitions.py
 from global_definitions import *
@@ -36,12 +38,9 @@ def main():
     signal.signal(signal.SIGHUP, exit_gracefully)
     signal.signal(signal.SIGINT, exit_gracefully)
     signal.signal(signal.SIGTERM, exit_gracefully)
+
     #attempt to get a list of every perl module installed:
-    os_status = os.system("cpan -l > "+PERLMOD_DUMPFILE)
-    #check to make sure the command worked
-    if os_status == 1:
-        print("Failed to get a list of perl modules installed: cpan -l cmd failed\n")
-        exit(1)
+    create_modulelist_tempfile()
 
     if cli_mode:
         #CLI MODE BELOW -------------------------------------------------------
@@ -80,10 +79,11 @@ def main():
         #connect our callback functions to the names specified in Glade
         # (names must be an exact match). These functions are defined in
         # gtk_helpers.py
-        builder.connect_signals({"destroy": Gtk.main_quit,
+        builder.connect_signals({"destroy": quit_btn_cb,
                                  "quit_btn_cb": quit_btn_cb,
                                  "next_btn_cb": (next_btn_cb, builder), 
-                                 "back_btn_cb": (back_btn_cb, builder)})
+                                 "back_btn_cb": (back_btn_cb, builder), 
+                                 "start_cb": (start_cb, builder)})
 
         window.show_all()
 
@@ -108,6 +108,7 @@ def pmodfile_manual_parse(pmod_name):
     NUM_LINES2SCAN = 25
     printout_retval = ""
 
+    #FIXME we don't need to do this initial perldoc command
     ostream = os.popen("perldoc -lm "+pmod_name+" 2>&1")
     #get the fully qualified filename from the above command
     module_filename = ostream.read()
@@ -118,18 +119,26 @@ def pmodfile_manual_parse(pmod_name):
         return None
     #strip the newline character from the output of the command
     module_filename = module_filename.rstrip("\n")
+
+    #store the module name for end user output in a variable for now
     printout_retval = pmod_name+", "
+    #do the perldoc check first
+    if quick_check(module_filename):
+        printout_retval += "free"
+        return printout_retval
+    #else we must manually parse the file header for comments which contain license info
+    
+    
     #the .pm file can be ascii/utf-8/etc, so we want to detect 
     #the charset before opening the file
     this_charset = which_charset(module_filename)
     #scan the file for license info
     perl_modfile = open(module_filename, 'r' ,encoding=this_charset)
+    
     is_openlicense = False
     #for now, we'll just scan the first 25 lines of the file
     for i in range(NUM_LINES2SCAN):
-        if perl_modfile.read(1) != "#":
-            pass
-        if line_check(perl_modfile.read()):
+        if line_check(perl_modfile.readline()):
             #as in freedom
             printout_retval += "free"
             return printout_retval
@@ -161,14 +170,66 @@ def which_charset(perl_module):
 
 
 def line_check(line):
+    #print(line)
     if "free software;" in line:
         return True
     else:
         return False
 
+#NOTE fq filename is short for fully qualified filename
+#RETURNS: False if the test was INCONCLUSIVE
+#         True if the test verified that the pm file is free software.  
+def quick_check(module_fq_filename):
+
+    if module_fq_filename == "/home/aaron/perl5/lib/perl5/ExtUtils/ParseXS.pm":
+        print("\n\nWE HAVE SANITY\n\n")
+    output = subprocess.Popen(["perldoc", module_fq_filename], stdout=PIPE, 
+                                stderr=subprocess.STDOUT) 
+
+    #| grep -n COPYRIGHT 2>&1)
+    #get the fully qualified filename from the above command
+    (out, err) = output.communicate()
+
+    perldoc_output = out.decode("utf-8")
+    #sanity check to make sure stderr is being redirected 
+    if err is not None:
+        print("ERROR: stderr redirect not working in quick_check. Error output:")
+        print(err)
+        exit_gracefully(None, None)
+
+    if "No documentation" in perldoc_output:
+        if module_fq_filename == "/home/aaron/perl5/lib/perl5/ExtUtils/ParseXS.pm":
+            print("\nFISHINESSSSSSSSSSSSSSSSSSSSSSS\n"+perldoc_output+"\n\n")
+            exit_gracefully(None, None)
+        #the grep command didn't find a COPYRIGHT header in the perldoc output
+        return False
+    
+    if "free software" in perldoc_output:
+        return True
+    else:
+        if module_fq_filename == "/home/aaron/perl5/lib/perl5/ExtUtils/ParseXS.pm":
+            print("\n\nGOT HERE\n\n")
+        return False
+    
+
 def exit_gracefully(sig, frame):
     os.remove(PERLMOD_DUMPFILE)
     exit(0)
+
+def create_modulelist_tempfile():
+    temp_fileobj = open(PERLMOD_DUMPFILE, "w")
+
+    out = subprocess.Popen(["cpan", "-l"], 
+                            stdout=temp_fileobj)
+
+    (stdout, stderr) = out.communicate()
+    if stderr is not None:
+        print("Error creating list of perl modules with cpan -l")
+        print("Error output:\n"+str(stderr))
+        temp_fileobj.close()
+        exit_gracefully(None, None)
+
+    temp_fileobj.close()
 
 if __name__ == "__main__":
 	main()

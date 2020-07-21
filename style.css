@@ -38,3 +38,15 @@
 	color: white;
 	background: #006400;
 }
+
+#start_btn:hover:active {
+	background: green;
+}
+
+#start_btn {
+
+	border-color: #111111;
+	color: white;
+	/* same as the next button, dark green colored */
+	background: #006400;
+}

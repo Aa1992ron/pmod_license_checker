@@ -25,3 +25,9 @@ def back_btn_cb(back_btn, builder):
 	win2hide.hide()
 	summary_screen = builder.get_object("first_screen")
 	summary_screen.show()
+
+def start_cb(start_btn, builder):
+	win2hide = start_btn.get_toplevel()
+	win2hide.hide()
+	summary_screen = builder.get_object("progress_screen")
+	summary_screen.show()
