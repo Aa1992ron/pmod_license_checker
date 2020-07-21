@@ -162,6 +162,7 @@ def parse_pmod_name(raw_line):
 #           If you didn't also guess by the name, it should also be 
 #           perl module file, or a '.pm' file
 def which_charset(perl_module):
+    #FIXME modify which_charset to use subprocess module
     #the following command will guess the charset of this particular file
     ostream = os.popen("file -i "+perl_module)
     info_output = ostream.read()
@@ -180,17 +181,18 @@ def line_check(line):
 #RETURNS: False if the test was INCONCLUSIVE
 #         True if the test verified that the pm file is free software.  
 def quick_check(module_fq_filename):
-
-    if module_fq_filename == "/home/aaron/perl5/lib/perl5/ExtUtils/ParseXS.pm":
-        print("\n\nWE HAVE SANITY\n\n")
+    #We should redirect this output to a file, so that we can run the file
+    # command to detect encoding -- otherwise we'll have to use the chardet python lib
+    # which will add a dependency.  This also means we can incorporate grep -n if we wish to
     output = subprocess.Popen(["perldoc", module_fq_filename], stdout=PIPE, 
-                                stderr=subprocess.STDOUT) 
+                                stderr=subprocess.STDOUT, universal_newlines=True) 
 
-    #| grep -n COPYRIGHT 2>&1)
     #get the fully qualified filename from the above command
     (out, err) = output.communicate()
-
-    perldoc_output = out.decode("utf-8")
+    #FIXME this will not always be utf-8, so we need to run a check on the 
+    # encoding of the module file
+    #this_charset = which_charset(module_fq_filename)
+    perldoc_output = out
     #sanity check to make sure stderr is being redirected 
     if err is not None:
         print("ERROR: stderr redirect not working in quick_check. Error output:")
@@ -198,17 +200,12 @@ def quick_check(module_fq_filename):
         exit_gracefully(None, None)
 
     if "No documentation" in perldoc_output:
-        if module_fq_filename == "/home/aaron/perl5/lib/perl5/ExtUtils/ParseXS.pm":
-            print("\nFISHINESSSSSSSSSSSSSSSSSSSSSSS\n"+perldoc_output+"\n\n")
-            exit_gracefully(None, None)
-        #the grep command didn't find a COPYRIGHT header in the perldoc output
+        #we didn't find a COPYRIGHT header in the perldoc output
         return False
     
     if "free software" in perldoc_output:
         return True
     else:
-        if module_fq_filename == "/home/aaron/perl5/lib/perl5/ExtUtils/ParseXS.pm":
-            print("\n\nGOT HERE\n\n")
         return False
     
 
