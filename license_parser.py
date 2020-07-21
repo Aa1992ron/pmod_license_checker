@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import time
 import signal
 import sys
 import argparse
@@ -122,8 +123,8 @@ def pmodfile_manual_parse(pmod_name):
 
     #store the module name for end user output in a variable for now
     printout_retval = pmod_name+", "
-    #do the perldoc check first
-    if quick_check(module_filename):
+    # Do the perldoc "quick" check first
+    if quick_check(module_filename, pmod_name):
         printout_retval += "free"
         return printout_retval
     #else we must manually parse the file header for comments which contain license info
@@ -180,33 +181,105 @@ def line_check(line):
 #NOTE fq filename is short for fully qualified filename
 #RETURNS: False if the test was INCONCLUSIVE
 #         True if the test verified that the pm file is free software.  
-def quick_check(module_fq_filename):
+def quick_check(module_fq_filename, module_name):
+    
+    NUM_LINES2SCAN = 10
+    PERLDOC_DUMPFILE = "perldoc_tmp.out"
     #We should redirect this output to a file, so that we can run the file
     # command to detect encoding -- otherwise we'll have to use the chardet python lib
     # which will add a dependency.  This also means we can incorporate grep -n if we wish to
-    output = subprocess.Popen(["perldoc", module_fq_filename], stdout=PIPE, 
-                                stderr=subprocess.STDOUT, universal_newlines=True) 
+    perldoc_fileobj = open(PERLDOC_DUMPFILE, "w")
+    output = subprocess.Popen(["perldoc", module_fq_filename], 
+                                stdout=perldoc_fileobj, stderr=perldoc_fileobj, 
+                                universal_newlines=True) 
+
+    
 
     #get the fully qualified filename from the above command
     (out, err) = output.communicate()
-    #FIXME this will not always be utf-8, so we need to run a check on the 
-    # encoding of the module file
-    #this_charset = which_charset(module_fq_filename)
-    perldoc_output = out
-    #sanity check to make sure stderr is being redirected 
+    perldoc_fileobj.close()
+
     if err is not None:
         print("ERROR: stderr redirect not working in quick_check. Error output:")
         print(err)
+        os.remove(PERLDOC_DUMPFILE)
         exit_gracefully(None, None)
 
-    if "No documentation" in perldoc_output:
-        #we didn't find a COPYRIGHT header in the perldoc output
+    #check the top of the file jsut in case we got a "No documentation"
+    # message from perldoc
+    if no_documentation(PERLDOC_DUMPFILE):
+        #use the name for the module rather than the fully qualified
+        # filename
+        perldoc_fileobj = open(PERLDOC_DUMPFILE, "w")
+        output = subprocess.Popen(["perldoc", module_name], 
+                                stdout=perldoc_fileobj, stderr=subprocess.STDOUT, 
+                                universal_newlines=True)
+
+        (out, err) = output.communicate()
+
+        #close the temporary file
+        perldoc_fileobj.close()
+
+
+
+    output = subprocess.Popen(["grep", "-n", "free software", PERLDOC_DUMPFILE], 
+                            stdout=PIPE, stderr=subprocess.STDOUT, 
+                            universal_newlines=True) 
+    (out, err) = output.communicate()
+    if err is not None:
+        print("ERROR: grep -n not working in quick_check. Error output:")
+        print(err)
+        os.remove(PERLDOC_DUMPFILE)
+        exit_gracefully(None, None)
+
+    if out == "":
+        #grep didn't find any copyright info
+        os.remove(PERLDOC_DUMPFILE)
         return False
-    
-    if "free software" in perldoc_output:
-        return True
     else:
-        return False
+        return True
+    # split_tmp = out.split(":")
+    # skipto_line = int(split_tmp[0])
+
+    # #print("seeking to line: "+skipto_line)
+
+    
+    # i = 0
+    # perldoc_fileobj = open(PERLDOC_DUMPFILE, "r")
+
+    # #seek to the line we want
+    # while i < skipto_line:
+    #     perldoc_fileobj.readline()
+    #     i += 1
+
+    # #at this point we will be one line below the "COPYRIGHT .." 
+    # # header in the perl POD docs
+
+    # #FIXME this will not always be utf-8, so we need to run a check on the 
+    # # encoding of the module file
+    # #this_charset = which_charset(module_fq_filename)
+    
+
+    # for i in range(NUM_LINES2SCAN):
+    #     this_line = perldoc_fileobj.readline()
+        
+    #     if line_check(this_line):
+    #         perldoc_fileobj.close()
+    #         os.remove(PERLDOC_DUMPFILE)
+    #         return True 
+            
+    # perldoc_fileobj.close()
+    # os.remove(PERLDOC_DUMPFILE)
+    # return False
+
+    # # if "No documentation" in perldoc_output:
+    # #     #we didn't find a COPYRIGHT header in the perldoc output
+    # #     return False
+    
+    # # if "free software" in perldoc_output:
+    # #     return True
+    # # else:
+    # #     return False
     
 
 def exit_gracefully(sig, frame):
@@ -227,6 +300,24 @@ def create_modulelist_tempfile():
         exit_gracefully(None, None)
 
     temp_fileobj.close()
+
+def no_documentation(DUMPFILE):
+    #The number below is chosen because we only need to 
+    # check the first line of the perldoc -lm output because 
+    # if no documentation exists for the module file, then
+    # only one line of output will be printed.  3 is chosen to be thorough
+    LINES_TO_CHECK = 3
+    perldoc_fileobj = open(DUMPFILE, "r")
+
+    for i in range(0,LINES_TO_CHECK):
+        line_2check = perldoc_fileobj.readline()
+        if "No documentation" in line_2check:
+            return True
+
+    perldoc_fileobj.close()
+    return False
+    
+
 
 if __name__ == "__main__":
 	main()
