@@ -28,8 +28,8 @@ def main():
     cli_mode = args.cli_mode
 
 
-    #Not sure if we'll need to handle a SIGABRT, but uncommenting
-    # the line will make you SUPER SAFE
+    #Not sure if we'll ever need to handle a SIGABRT, but uncommenting
+    # the line below will make you SUPER SAFE (tm)
     #signal.signal(signal.SIGABRT, exit_gracefully)
 
     # Connect our handler for hangup, interrupt and terminate signals ,
@@ -309,7 +309,13 @@ def no_documentation(DUMPFILE):
     perldoc_fileobj = open(DUMPFILE, "r")
 
     for i in range(0,LINES_TO_CHECK):
-        line_2check = perldoc_fileobj.readline()
+        try:
+            line_2check = perldoc_fileobj.readline()
+        except:
+            perldoc_fileobj.close()
+            charset = which_charset(os.path.join(WHERE_AM_I,DUMPFILE))
+            perldoc_fileobj = open(DUMPFILE, 'r' ,encoding=charset)
+            line_2check = perldoc_fileobj.readline()
         if "No documentation" in line_2check:
             return True
 
