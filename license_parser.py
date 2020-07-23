@@ -4,15 +4,14 @@ import signal
 import sys
 import argparse
 import subprocess
+#Pipe is used so that we don't clutter output for CLI mode.  
 from subprocess import PIPE
-#to cut down on repeated imports, common imports and global
-#variables are in a seperate file -- global_definitions.py
+#to make certain imports usable by the license checker file (this file)
+# and the gtk callback functions (gtk_helpers), use:
+# global_definitions.py
 from global_definitions import *
 #custom gtk helper functions import:
 from gtk_helpers import *
-
-#from file_read_backwards import FileReadBackwards 
-
 
 def main():
     #Help text for command line args
