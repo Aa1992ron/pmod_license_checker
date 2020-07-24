@@ -63,7 +63,7 @@ def main():
         #Now that we're done going through all those modules, delete the temp file
         os.remove(PERLMOD_DUMPFILE)
         #----------------------------------------------------------------------
-    else: 
+    else:
         print("--- running in gui mode ---")
         #GUI MODE BELOW -------------------------------------------------------
         #win = Gtk.Window()
@@ -108,10 +108,18 @@ def pmodfile_manual_parse(pmod_name):
     NUM_LINES2SCAN = 25
     printout_retval = ""
 
-    #FIXME use subprocess.Popen here
-    ostream = os.popen("perldoc -lm "+pmod_name+" 2>&1")
+    output = subprocess.Popen(["perldoc", "-lm", pmod_name], 
+                            stdout=PIPE, stderr=subprocess.STDOUT, 
+                            universal_newlines=True)
+    (out, err) = output.communicate()
+    if err is not None:
+        print("ERROR -- problem with initial perldoc -lm system call. Output:")
+        print(err)
+        os.remove(PERLDOC_DUMPFILE)
+        exit_gracefully(None, None)
+
     #get the fully qualified filename from the above command
-    module_filename = ostream.read()
+    module_filename = out
 
     #If the perldoc command was successful, the first character
     # of the output will be the root path character 
@@ -128,7 +136,6 @@ def pmodfile_manual_parse(pmod_name):
         return printout_retval
     #else we must manually parse the file header for comments 
     # which contain license info
-    
     
     #the .pm file can be ascii/utf-8/etc, so we want to detect 
     #the charset before opening the file
@@ -176,9 +183,7 @@ def which_charset(perl_modfile):
         exit_gracefully(None, None)
 
     charset = out.split("=")
-    # ostream = os.popen("file -i "+perl_module)
-    # info_output = ostream.read()
-    # charset = info_output.split("=");
+
     return charset[1]
 
 
