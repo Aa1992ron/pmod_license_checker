@@ -4,7 +4,7 @@ import signal
 import sys
 import argparse
 import subprocess
-#Pipe is used so that we don't clutter output for CLI mode.  
+#PIPE is used so that we don't clutter output for CLI mode.  
 from subprocess import PIPE
 #to make certain imports usable by the license checker file (this file)
 # and the gtk callback functions (gtk_helpers), use:
@@ -108,7 +108,7 @@ def pmodfile_manual_parse(pmod_name):
     NUM_LINES2SCAN = 25
     printout_retval = ""
 
-    #FIXME we don't need to do this initial perldoc command
+    #FIXME use subprocess.Popen here
     ostream = os.popen("perldoc -lm "+pmod_name+" 2>&1")
     #get the fully qualified filename from the above command
     module_filename = ostream.read()
@@ -126,7 +126,8 @@ def pmodfile_manual_parse(pmod_name):
     if quick_check(module_filename, pmod_name):
         printout_retval += "free"
         return printout_retval
-    #else we must manually parse the file header for comments which contain license info
+    #else we must manually parse the file header for comments 
+    # which contain license info
     
     
     #the .pm file can be ascii/utf-8/etc, so we want to detect 
@@ -161,12 +162,23 @@ def parse_pmod_name(raw_line):
 #REQUIRES:  perl_module is a file denoted with an absolute path.
 #           If you didn't also guess by the name, it should also be 
 #           perl module file, or a '.pm' file
-def which_charset(perl_module):
+def which_charset(perl_modfile):
     #FIXME modify which_charset to use subprocess module
     #the following command will guess the charset of this particular file
-    ostream = os.popen("file -i "+perl_module)
-    info_output = ostream.read()
-    charset = info_output.split("=");
+    output = subprocess.Popen(["file", "-i", perl_modfile], 
+                            stdout=PIPE, stderr=subprocess.STDOUT, 
+                            universal_newlines=True)
+    (out, err) = output.communicate()
+    if err is not None:
+        print("ERROR -- problem with file -i system call. Output:")
+        print(err)
+        os.remove(PERLDOC_DUMPFILE)
+        exit_gracefully(None, None)
+
+    charset = out.split("=")
+    # ostream = os.popen("file -i "+perl_module)
+    # info_output = ostream.read()
+    # charset = info_output.split("=");
     return charset[1]
 
 
@@ -184,22 +196,20 @@ def quick_check(module_fq_filename, module_name):
     
     NUM_LINES2SCAN = 10
     PERLDOC_DUMPFILE = "perldoc_tmp.out"
-    #We should redirect this output to a file, so that we can run the file
-    # command to detect encoding -- otherwise we'll have to use the chardet python lib
-    # which will add a dependency.  This also means we can incorporate grep -n if we wish to
+    #We are using the method of dumping the output to a file here
+    # in order to avoid using an additional python dependency.
     perldoc_fileobj = open(PERLDOC_DUMPFILE, "w")
     output = subprocess.Popen(["perldoc", module_fq_filename], 
                                 stdout=perldoc_fileobj, stderr=perldoc_fileobj, 
                                 universal_newlines=True) 
 
     
-
     #get the fully qualified filename from the above command
     (out, err) = output.communicate()
     perldoc_fileobj.close()
 
     if err is not None:
-        print("ERROR: stderr redirect not working in quick_check. Error output:")
+        print("ERROR in perldoc system call:")
         print(err)
         os.remove(PERLDOC_DUMPFILE)
         exit_gracefully(None, None)
