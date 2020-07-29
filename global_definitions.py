@@ -13,12 +13,29 @@ PERLMOD_DUMPFILE = "pmlist_temp.out"
 REPORT_DEFAULT_NAME = "pmod_report.csv"
 #we need this vaiable so that we can delete an incomplete
 # report file in the event that the program terminates 
+global report_csv_created
 report_csv_created = False
 
+global gui_syscalls
+gui_syscalls = False
 
-def exit_gracefully(sig, frame, report=False):
+
+def exit_gracefully(sig, frame):
+    global report_csv_created
     os.remove(PERLMOD_DUMPFILE)
-    if report:
+
+    if report_csv_created:
     	os.remove(REPORT_DEFAULT_NAME)
     exit(0)
 
+def set_report_csv(exists):
+    global report_csv_created
+    report_csv_created = exists
+
+def set_gui_syscalls():
+    global gui_syscalls
+    gui_syscalls = True
+
+def get_gui_syscalls():
+    global gui_syscalls
+    return gui_syscalls

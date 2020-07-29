@@ -62,6 +62,8 @@ def main():
         #----------------------------------------------------------------------
     else:
         print("--- running in gui mode ---")
+        global gui_syscalls
+        gui_syscalls = True
         #GUI MODE BELOW -------------------------------------------------------
         #win = Gtk.Window()
         #win.connect("destroy", Gtk.main_quit)
@@ -92,9 +94,6 @@ def main():
     
     return 0
     
-
-if __name__ == "__main__":
-	main()
 
 #EFFECTS: Runs a simple manual parse to determine license data. 
 #           for right now, it only checks the first 25 lines of the 
@@ -252,7 +251,8 @@ def quick_check(module_fq_filename, module_name):
 def create_modulelist_tempfile():
     temp_fileobj = open(PERLMOD_DUMPFILE, "w")
 
-    out = system_call(["cpan", "-l"], temp_fileobj, subprocess.STDERR, False)
+    out = subprocess.Popen(["cpan", "-l"], stdout=temp_fileobj, 
+                            universal_newlines=True)
 
     (stdout, stderr) = out.communicate()
     if stderr is not None:
@@ -291,3 +291,6 @@ def system_call(cmd_array, standard_out, standard_err, gui_mode):
     else:
         return subprocess.Popen(cmd_array, stdout=standard_out, 
                                 stderr=standard_err, universal_newlines=True)
+
+if __name__ == "__main__":
+    main()

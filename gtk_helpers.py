@@ -1,4 +1,5 @@
 from global_definitions import *
+from license_parser import create_modulelist_tempfile, parse_pmod_name
 
 #EFFECTS: Necessary to link the style sheet with our gtk windows
 def style_init():
@@ -34,10 +35,13 @@ def start_cb(start_btn, builder):
 	progress_bar.set_fraction(0.0)
 	current_module = builder.get_object("processing_text")
 
-
+	
 	output_sheet = open(REPORT_DEFAULT_NAME, "w")
+	#set the global variable that tells exit gracefully to 
+	# remove this file in case of interrupt/early termination
+	set_report_csv(True)
 
-	#current_module.set_markup("Counting lines in list file")
+	current_module.set_markup("Counting lines in list file")
 
 	output = subprocess.Popen(["wc", "-l", PERLMOD_DUMPFILE], 
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
@@ -48,7 +52,7 @@ def start_cb(start_btn, builder):
 	if err is not None:
 		print("ERROR -- problem with wc -l. Output:")
 		print(err)
-		exit_gracefully(None, None, True)
+		exit_gracefully(None, None)
 
 	module_amt_data = out.split(" ")
 
@@ -81,6 +85,7 @@ def start_cb(start_btn, builder):
 			    pass
 			else:
 				output_sheet.write(pmod_name+","+parse_result+"\n")
+	report_csv_created = False
 	mod_listfile.close()
 	output_sheet.close()
     #Now that we're done going through all those modules, delete the temp file
