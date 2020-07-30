@@ -66,7 +66,7 @@ def start_cb(start_btn, builder):
 	with open(PERLMOD_DUMPFILE) as mod_listfile:
 		mod_listfile.readline()
 		for line in mod_listfile:
-			time.sleep(0.1)
+
 			progress_bar.set_fraction(i/num_modules)
             #parse the name of this perl module from the line
 			pmod_name = parse_pmod_name(line)
