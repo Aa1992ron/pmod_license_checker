@@ -2,6 +2,7 @@
 import signal
 import sys
 import argparse
+import chardet
 
 #to make certain imports usable by the license checker file (this file)
 # and the gtk callback functions (gtk_helpers), use:
@@ -106,21 +107,28 @@ def pmodfile_manual_parse(pmod_name):
     NUM_LINES2SCAN = 25
     printout_retval = ""
 
-    output = system_call(["perldoc", "-lm", pmod_name], PIPE, 
-                            subprocess.STDOUT, False)
-    (out, err) = output.communicate()
-    if err is not None:
+    syscall_flags =  Gio.SubprocessFlags.STDOUT_PIPE
+    syscall_flags |= Gio.SubprocessFlags.STDERR_MERGE
+    #syscall_flags |= Gio.SubprocessFlags.STDERR_PIPE
+    sp = Gio.Subprocess.new(["perldoc", "-lm", pmod_name, None], 
+                                syscall_flags)
+    (success, out, err) = sp.communicate_utf8()
+
+    if success is not True:
         print("ERROR -- problem with initial perldoc -lm system call. Output:")
         print(err)
-        os.remove(PERLDOC_DUMPFILE)
         exit_gracefully(None, None)
-
+ 
     #get the fully qualified filename from the above command
     module_filename = out
 
+    #print("CHECKING: "+pmod_name)
     #If the perldoc command was successful, the first character
     # of the output will be the root path character 
-    if module_filename[0] == "N":
+    if module_filename == "" or module_filename == None:
+        print("ERROR: perldoc -lm "+pmod_name+" gave no output..")
+        return None
+    elif module_filename[0] == "N":
         return None
     #strip the newline character from the output of the command
     module_filename = module_filename.rstrip("\n")
@@ -169,15 +177,23 @@ def parse_pmod_name(raw_line):
 def which_charset(perl_modfile):
     #FIXME modify which_charset to use subprocess module
     #the following command will guess the charset of this particular file
-    output = system_call(["file", "-i", perl_modfile], PIPE, 
-                            subprocess.STDOUT, False)
-    (out, err) = output.communicate()
-    if err is not None:
-        print("ERROR -- problem with file -i system call. Output:")
-        print(err)
-        os.remove(PERLDOC_DUMPFILE)
+    syscall_flags =  Gio.SubprocessFlags.STDOUT_PIPE
+    syscall_flags |= Gio.SubprocessFlags.STDERR_MERGE
+    output = Gio.Subprocess.new(["file", "-i", perl_modfile,None], syscall_flags)
+    (success, out, err) = output.communicate_utf8()
+    failure = not success
+
+    if failure:
+        print("ERROR calling file -i in which_charset")
+        print(out)
         exit_gracefully(None, None)
 
+    if out == "" or out == None:
+        print("ERROR: command \' file -i "+perl_modfile+"\' gave no output..")
+        print(out)
+        exit_gracefully(None, None)
+
+    #output is okay to split
     charset = out.split("=")
 
     return charset[1]
@@ -196,53 +212,40 @@ def line_check(line):
 def quick_check(module_fq_filename, module_name):
     
     NUM_LINES2SCAN = 10
-    PERLDOC_DUMPFILE = "perldoc_tmp.out"
-    #We are using the method of dumping the output to a file here
-    # in order to avoid using an additional python dependency.
-    perldoc_fileobj = open(PERLDOC_DUMPFILE, "w")
-    output = system_call(["perldoc", module_fq_filename], 
-                                perldoc_fileobj, perldoc_fileobj, 
-                                False) 
 
-    
-    #get the fully qualified filename from the above command
-    (out, err) = output.communicate()
-    perldoc_fileobj.close()
-
-    if err is not None:
-        print("ERROR in perldoc system call:")
-        print(err)
-        os.remove(PERLDOC_DUMPFILE)
-        exit_gracefully(None, None)
+    perldoc_result = get_perl_docs(module_fq_filename)
 
     #check the top of the file just in case we got a "No documentation"
     # message from perldoc
-    if no_documentation(PERLDOC_DUMPFILE):
+    if "No documentation" in perldoc_result:
         #use the name for the module rather than the fully qualified
         # filename
-        perldoc_fileobj = open(PERLDOC_DUMPFILE, "w")
-        output = system_call(["perldoc", module_name], 
-                                perldoc_fileobj, subprocess.STDOUT, 
-                                False)
+        perldoc_result = get_perl_docs(module_name)
+        #check if we found documentation using only the module name
+        if "No documentation" in perldoc_result:
+            return False
 
-        (out, err) = output.communicate()
+    syscall_flags =  Gio.SubprocessFlags.STDOUT_PIPE
+    syscall_flags |= Gio.SubprocessFlags.STDERR_MERGE
+    syscall_flags |= Gio.SubprocessFlags.STDIN_PIPE
+    sp = Gio.Subprocess.new(["grep", "free\ software", None], 
+                            syscall_flags) 
+    (success, out, err) = sp.communicate_utf8(perldoc_result)
 
-        #close the temporary file
-        perldoc_fileobj.close()
+    failure = not success
 
-    output = system_call(["grep", "-n", "free software", PERLDOC_DUMPFILE], 
-                            PIPE, subprocess.STDOUT, 
-                            False) 
-    (out, err) = output.communicate()
-    if err is not None:
-        print("ERROR: grep -n not working in quick_check. Error output:")
-        print(err)
-        os.remove(PERLDOC_DUMPFILE)
+    if failure:
+        print("ERROR in grep system call in quick_check:")
+        print(out)
+        exit_gracefully(None, None)
+
+    if out == None:
+        print("ERROR: grep command gave output: None in quick_check..")
+        print(out)
         exit_gracefully(None, None)
 
     if out == "":
         #grep didn't find any copyright info
-        os.remove(PERLDOC_DUMPFILE)
         return False
     else:
         return True
@@ -263,34 +266,48 @@ def create_modulelist_tempfile():
 
     temp_fileobj.close()
 
-def no_documentation(DUMPFILE):
-    #The number below is chosen because we only need to 
-    # check the first line of the perldoc -lm output because 
-    # if no documentation exists for the module file, then
-    # only one line of output will be printed.  3 is chosen to be thorough
-    LINES_TO_CHECK = 3
-    perldoc_fileobj = open(DUMPFILE, "r")
+def get_perl_docs(module):
+    #redirect errors to STDOUT
+    syscall_flags =  Gio.SubprocessFlags.STDOUT_PIPE
+    syscall_flags |= Gio.SubprocessFlags.STDERR_MERGE
+    sp = Gio.Subprocess.new(["perldoc", module, None], 
+                                syscall_flags)
 
-    for i in range(0,LINES_TO_CHECK):
-        try:
-            line_2check = perldoc_fileobj.readline()
-        except:
-            perldoc_fileobj.close()
-            charset = which_charset(os.path.join(WHERE_AM_I,DUMPFILE))
-            perldoc_fileobj = open(DUMPFILE, 'r' ,encoding=charset)
-            line_2check = perldoc_fileobj.readline()
-        if "No documentation" in line_2check:
-            return True
+    decode_bytes = False
 
-    perldoc_fileobj.close()
-    return False
+    try:
+        (success, out, err) = sp.communicate_utf8()
+    except gi.repository.GLib.Error:
+        #run the command again but get raw bytes instead of trying
+        # to decode to utf-8
+        sp = Gio.Subprocess.new(["perldoc", module, None], 
+                                syscall_flags)
+        (success, out, err) = sp.communicate()
+        decode_bytes = True
 
-def system_call(cmd_array, standard_out, standard_err, gui_mode):
-    if gui_mode:
-        pass
-    else:
-        return subprocess.Popen(cmd_array, stdout=standard_out, 
-                                stderr=standard_err, universal_newlines=True)
+    failure = not success
+
+    if failure:
+        print("ERROR in perldoc system call:")
+        print(out)
+        exit_gracefully(None, None)
+
+    if out == "" or out == None:
+        print("ERROR: command\' perldoc "+pmod_name+"\' gave no output..")
+        print(out)
+        exit_gracefully(None, None)
+
+    if decode_bytes:
+        #deal with the case where the perldocs are encoded using a charset
+        # other than utf-8
+        my_bytes = out.get_data()
+        encoding = chardet.detect(my_bytes)['encoding']
+        out = my_bytes.decode(encoding)
+
+
+    #output is okay to send back to caller
+    return out
+
 
 if __name__ == "__main__":
     main()
