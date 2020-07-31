@@ -1,5 +1,6 @@
 from global_definitions import *
 from license_parser import create_modulelist_tempfile, parse_pmod_name
+#from license_parser import pmodfile_manual_parse
 
 #EFFECTS: Necessary to link the style sheet with our gtk windows
 def style_init():
@@ -34,59 +35,63 @@ def start_cb(start_btn, builder):
 	progress_bar = builder.get_object("progress_bar")
 	progress_bar.set_fraction(0.0)
 	current_module = builder.get_object("processing_text")
-
-	
-	output_sheet = open(REPORT_DEFAULT_NAME, "w")
-	#set the global variable that tells exit gracefully to 
-	# remove this file in case of interrupt/early termination
-	set_report_csv(True)
-
-	current_module.set_markup("Counting lines in list file")
-
-	output = subprocess.Popen(["wc", "-l", PERLMOD_DUMPFILE], 
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
-                            universal_newlines=True)
-
-	(out, err) = output.communicate()
-
-	if err is not None:
-		print("ERROR -- problem with wc -l. Output:")
-		print(err)
-		exit_gracefully(None, None)
-
-	module_amt_data = out.split(" ")
-
-	num_modules = int(module_amt_data[0])
-
 	progress_screen.show()
-	current_module.set_markup("Loading module list file")
-
-	i = 1
-
-	with open(PERLMOD_DUMPFILE) as mod_listfile:
-		mod_listfile.readline()
-		for line in mod_listfile:
-
-			progress_bar.set_fraction(i/num_modules)
-            #parse the name of this perl module from the line
-			pmod_name = parse_pmod_name(line)
-
-			current_module.set_markup("Parsing module: "+pmod_name)
-            #run our manual check and get a result to print out
-            #for this module
-            #this will be in csv format -- Module::Name,[free/proprietary?]
-			#parse_result = pmodfile_manual_parse(pmod_name)
-			parse_result = None
-			i += 1
-			print(str(i))
-			if parse_result is None:
-			    #in this case, an erroneous line of output was passed
-			    # to perldoc -lm. 
-			    pass
-			else:
-				output_sheet.write(pmod_name+","+parse_result+"\n")
-	report_csv_created = False
-	mod_listfile.close()
-	output_sheet.close()
-    #Now that we're done going through all those modules, delete the temp file
 	return
+	
+	# output_sheet = open(REPORT_DEFAULT_NAME, "w")
+	# #set the global variable that tells exit gracefully to 
+	# # remove this file in case of interrupt/early termination
+	# set_report_csv(True)
+
+	# current_module.set_markup("Counting lines in list file")
+
+	# output = subprocess.Popen(["wc", "-l", PERLMOD_DUMPFILE], 
+ #                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
+ #                            universal_newlines=True)
+
+	# (out, err) = output.communicate()
+
+	# if err is not None:
+	# 	print("ERROR -- problem with wc -l. Output:")
+	# 	print(err)
+	# 	exit_gracefully(None, None)
+
+	# module_amt_data = out.split(" ")
+
+	# num_modules = int(module_amt_data[0])
+
+	# progress_screen.show()
+	# current_module.set_markup("Loading module list file")
+
+	# i = 1
+
+	# with open(PERLMOD_DUMPFILE) as mod_listfile:
+	# 	mod_listfile.readline()
+	# 	for line in mod_listfile:
+
+	# 		progress_bar.set_fraction(i/num_modules)
+ #            #parse the name of this perl module from the line
+	# 		pmod_name = parse_pmod_name(line)
+
+	# 		current_module.set_markup("Parsing module: "+pmod_name)
+ #            #run our manual check and get a result to print out
+ #            #for this module
+ #            #this will be in csv format -- Module::Name,[free/proprietary?]
+	# 		#parse_result = pmodfile_manual_parse(pmod_name)
+	# 		parse_result = pmodfile_manual_parse(pmod_name)
+	# 		i += 1
+	# 		print(str(i))
+	# 		if parse_result is None:
+	# 		    #in this case, an erroneous line of output was passed
+	# 		    # to perldoc -lm. 
+	# 		    pass
+	# 		else:
+	# 			output_sheet.write(pmod_name+","+parse_result+"\n")
+	# report_csv_created = False
+	# mod_listfile.close()
+	# output_sheet.close()
+ #    #Now that we're done going through all those modules, delete the temp file
+	# exit(0)
+
+#FIXME we need to change the system calls to return asynchronously
+#https://stackoverflow.com/questions/35036122/unable-to-initialize-a-window-and-wait-for-a-process-to-end-in-python-3-gtk-3

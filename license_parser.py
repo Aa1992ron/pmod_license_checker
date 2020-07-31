@@ -46,18 +46,53 @@ def main():
         with open(PERLMOD_DUMPFILE) as mod_listfile:
             mod_listfile.readline()
             for line in mod_listfile:
+                free_software = False
                 #parse the name of this perl module from the line
                 pmod_name = parse_pmod_name(line)
-                #run our manual check and get a result to print out
-                #for this module
-                #this will be in csv format -- Module::Name,[free/proprietary?]
-                parse_result = pmodfile_manual_parse(pmod_name)
-                if parse_result is None:
-                    #in this case, an erroneous line of output was passed
-                    # to perldoc -lm. 
-                    pass
+                pmod_fqfilename = get_pmod_fqfn_cli(pmod_name)
+                # --- Check the perldocs for this module --- #
+                perldocs = get_perldocs_cli(pmod_name)
+
+                documentation =  not no_documentation(perldocs)
+                if documentation:
+                    free_software = parse_perldocs(perldocs)
                 else:
-                    print(parse_result)
+                    #Running perldoc on the module name failed.
+                    #Get the FQFN and run perldoc on that
+                    perldocs = get_perldocs_cli(pmod_fqfilename)
+                    documentation =  not no_documentation(perldocs)
+                    if documentation:
+                        free_software = parse_perldocs(perldocs)
+                    else:
+                        #NOTE: for now we can continue, but once we add
+                        # checks beyond perldoc parsing and manual file
+                        # parsing, we'll want to set a bool here instead.
+                        # The reason for this is if the code reaches here,
+                        # then perldoc -lm failed to return a fully qualified
+                        # filename for the module name.  This means than we 
+                        # CANNOT pass the variable 'pmod_fqfilename' to
+                        # the manual parse function.  
+                        continue
+                        
+                if free_software:
+                    #this perl module is licensed as free software
+                    print(pmod_name+", free")
+                    continue
+                
+                # --- Run a manual file parse here --- #
+                pmodfile_charset = which_charset(pmod_fqfilename)
+                free_software = pmodfile_parse(pmod_fqfilename, 
+                                                pmodfile_charset)
+
+                if free_software:
+                    #this perl module is licensed as free software
+                    print(pmod_name+", free")
+                    continue
+
+                print(pmod_name+", proprietary?")
+                #run a different check here
+                
+                
         #Now that we're done going through all those modules, delete the temp file
         os.remove(PERLMOD_DUMPFILE)
         #----------------------------------------------------------------------
@@ -99,67 +134,27 @@ def main():
 #EFFECTS: Runs a simple manual parse to determine license data. 
 #           for right now, it only checks the first 25 lines of the 
 #           given perl module file to determine this license data. 
-#           More functionality to be added soon
-#NOTES: additional checks we could do
-#       check the perldoc(?) for license info
-#       if this cannot be done, we may have to resort to  reverse read
-def pmodfile_manual_parse(pmod_name):
+#           if the line is not a comment, it will skip without checking
+#RETURNS: True if free software, False if inconclusive
+def pmodfile_parse(pmod_fqfn, charset):
     NUM_LINES2SCAN = 25
-    printout_retval = ""
 
-    syscall_flags =  Gio.SubprocessFlags.STDOUT_PIPE
-    syscall_flags |= Gio.SubprocessFlags.STDERR_MERGE
-    #syscall_flags |= Gio.SubprocessFlags.STDERR_PIPE
-    sp = Gio.Subprocess.new(["perldoc", "-lm", pmod_name, None], 
-                                syscall_flags)
-    (success, out, err) = sp.communicate_utf8()
-
-    if success is not True:
-        print("ERROR -- problem with initial perldoc -lm system call. Output:")
-        print(err)
-        exit_gracefully(None, None)
- 
-    #get the fully qualified filename from the above command
-    module_filename = out
-
-    #print("CHECKING: "+pmod_name)
-    #If the perldoc command was successful, the first character
-    # of the output will be the root path character 
-    if module_filename == "" or module_filename == None:
-        print("ERROR: perldoc -lm "+pmod_name+" gave no output..")
-        return None
-    elif module_filename[0] == "N":
-        return None
-    #strip the newline character from the output of the command
-    module_filename = module_filename.rstrip("\n")
-
-    #store the module name for end user output in a variable for now
-    printout_retval = pmod_name+", "
-    # Do the perldoc "quick" check first
-    if quick_check(module_filename, pmod_name):
-        printout_retval += "free"
-        return printout_retval
-    #else we must manually parse the file header for comments 
-    # which contain license info
-    
-    #the .pm file can be ascii/utf-8/etc, so we want to detect 
-    #the charset before opening the file
-    this_charset = which_charset(module_filename)
     #scan the file for license info
-    perl_modfile = open(module_filename, 'r' ,encoding=this_charset)
+    perl_modfile = open(pmod_fqfn, 'r' ,encoding=charset)
     
-    is_openlicense = False
     #for now, we'll just scan the first 25 lines of the file
+    # skip all lines which are not comments. License data is not 
+    # part of the perl module code (lol)
     for i in range(NUM_LINES2SCAN):
-        if line_check(perl_modfile.readline()):
+        this_line = perl_modfile.readline()
+        if this_line == "":
+            return False
+        if this_line[0] != '#':
+            continue
+        if line_check(this_line):
             #as in freedom
-            printout_retval += "free"
-            return printout_retval
-    #if the loop didn't find the keywords which signal a free license,
-    # warn users that it may be a proprietary license
-    if not is_openlicense:
-        printout_retval += "proprietary?"
-        return printout_retval
+            return True
+
 
 #EFFECTS: parse out the name of a perl module from a single line of output
 #           from the command cpan -l
@@ -196,7 +191,15 @@ def which_charset(perl_modfile):
     #output is okay to split
     charset = out.split("=")
 
-    return charset[1]
+    try:
+        retval = charset[1]
+    except IndexError:
+        print("caught an index error:")
+        print("filename: "+perl_modfile)
+        print("file -i output: "+out)
+        exit_gracefully(None, None)
+
+    return retval
 
 
 def line_check(line):
@@ -206,50 +209,20 @@ def line_check(line):
     else:
         return False
 
-#NOTE fq filename is short for fully qualified filename
+
 #RETURNS: False if the test was INCONCLUSIVE
 #         True if the test verified that the pm file is free software.  
-def quick_check(module_fq_filename, module_name):
-    
-    NUM_LINES2SCAN = 10
+def parse_perldocs(perldocs):
+    perldoc_lines = perldocs.split("\n")
+    #license info tends to be near the bottom of the perl docs,
+    # so reverse the lines array
+    perldoc_lines.reverse()
 
-    perldoc_result = get_perl_docs(module_fq_filename)
+    for line in perldoc_lines:
+        if line_check(line):
+            return True
+    return False
 
-    #check the top of the file just in case we got a "No documentation"
-    # message from perldoc
-    if "No documentation" in perldoc_result:
-        #use the name for the module rather than the fully qualified
-        # filename
-        perldoc_result = get_perl_docs(module_name)
-        #check if we found documentation using only the module name
-        if "No documentation" in perldoc_result:
-            return False
-
-    syscall_flags =  Gio.SubprocessFlags.STDOUT_PIPE
-    syscall_flags |= Gio.SubprocessFlags.STDERR_MERGE
-    syscall_flags |= Gio.SubprocessFlags.STDIN_PIPE
-    sp = Gio.Subprocess.new(["grep", "free\ software", None], 
-                            syscall_flags) 
-    (success, out, err) = sp.communicate_utf8(perldoc_result)
-
-    failure = not success
-
-    if failure:
-        print("ERROR in grep system call in quick_check:")
-        print(out)
-        exit_gracefully(None, None)
-
-    if out == None:
-        print("ERROR: grep command gave output: None in quick_check..")
-        print(out)
-        exit_gracefully(None, None)
-
-    if out == "":
-        #grep didn't find any copyright info
-        return False
-    else:
-        return True
-    
 
 def create_modulelist_tempfile():
     temp_fileobj = open(PERLMOD_DUMPFILE, "w")
@@ -266,7 +239,8 @@ def create_modulelist_tempfile():
 
     temp_fileobj.close()
 
-def get_perl_docs(module):
+#EFFECTS: runs syncronous perldoc command and returns the output
+def get_perldocs_cli(module):
     #redirect errors to STDOUT
     syscall_flags =  Gio.SubprocessFlags.STDOUT_PIPE
     syscall_flags |= Gio.SubprocessFlags.STDERR_MERGE
@@ -304,9 +278,64 @@ def get_perl_docs(module):
         encoding = chardet.detect(my_bytes)['encoding']
         out = my_bytes.decode(encoding)
 
-
     #output is okay to send back to caller
     return out
+
+# no_documentation rears its ugly head once again >:)
+#EFFECTS: performs a smart check on the first line of output.  
+#          We don't want to run a simple python check, because
+#          if our perldoc command returned full documentation 
+#          for a given module, python will search the whole thing 
+#          for the string "No documentation." 
+#          
+#          So instead this function will grab the first line 
+#          and check it for "No documentation" or "No module found"
+def no_documentation(perldoc_output):
+    search_limit = len(perldoc_output)
+    i = 0
+    first_line = ""
+
+    while i < search_limit:
+        #build the first line
+        if perldoc_output[i] == '\n':
+            break
+        first_line += perldoc_output[i]
+        i += 1
+
+    if "No documentation" in first_line:
+        return True
+    elif "No module" in first_line:
+        return True
+    else:
+        return False
+
+def get_pmod_fqfn_cli(pmod_name):
+    syscall_flags =  Gio.SubprocessFlags.STDOUT_PIPE
+    syscall_flags |= Gio.SubprocessFlags.STDERR_MERGE
+    #syscall_flags |= Gio.SubprocessFlags.STDERR_PIPE
+    sp = Gio.Subprocess.new(["perldoc", "-lm", pmod_name, None], 
+                                syscall_flags)
+    #FIXME we'll want to change this into callback form that we can generalize
+    # accross both gui and cli modes if we can
+
+    (success, out, err) = sp.communicate_utf8()
+
+    if success is not True:
+        print("ERROR -- problem with perldoc -lm command. Output:")
+        print(err)
+        exit_gracefully(None, None)
+ 
+    #get the fully qualified filename from the above command
+    module_filename = out
+
+    #print("CHECKING: "+pmod_name)
+    #If the perldoc command was successful, the first character
+    # of the output will be the root path character 
+    if module_filename == "" or module_filename == None:
+        print("ERROR: perldoc -lm "+pmod_name+" gave no output..")
+        exit_gracefully(None,None)
+
+    return out.rstrip("\n")
 
 
 if __name__ == "__main__":
