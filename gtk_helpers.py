@@ -1,6 +1,33 @@
 from global_definitions import *
 from license_parser import create_modulelist_tempfile, parse_pmod_name
 #from license_parser import pmodfile_manual_parse
+import asyncio
+
+class Async_data:
+	def __init__(self, gtkbuilder):
+		self.num_modules = -1
+		self.builder = gtkbuilder
+
+	def generate_report(self):
+		print(self.num_modules)
+		Gtk.main_quit()
+
+	#MODIFIES: self.num_modules
+	#EFFECTS: kicks of the report generating process.
+	def start_callback(self, subprocess, result):
+		[success, out, err] = subprocess.communicate_utf8()
+		if success:
+			module_amt_data = out.split(" ")
+			self.num_modules = int(module_amt_data[0])
+			subprocess.wait_check_finish(result)
+		else:
+			print("error in async wc -l call")
+			exit_gracefully(None,None)
+		self.generate_report()
+
+
+		
+
 
 #EFFECTS: Necessary to link the style sheet with our gtk windows
 def style_init():
@@ -28,7 +55,7 @@ def back_btn_cb(back_btn, builder):
 	summary_screen = builder.get_object("first_screen")
 	summary_screen.show()
 
-def start_cb(start_btn, builder):
+def start_cb(start_btn, builder, async_data):
 	win2hide = start_btn.get_toplevel()
 	win2hide.hide()
 	progress_screen = builder.get_object("progress_screen")
@@ -36,8 +63,21 @@ def start_cb(start_btn, builder):
 	progress_bar.set_fraction(0.0)
 	current_module = builder.get_object("processing_text")
 	progress_screen.show()
-	return
+
+	#need to count the number of modules we'll be processing for the progress bar
+	num_modules = [-1]
+	syscall_flags =  Gio.SubprocessFlags.STDOUT_PIPE
+	syscall_flags |= Gio.SubprocessFlags.STDERR_MERGE
+	module_cnt_syscall = Gio.Subprocess.new(["wc", "-l", PERLMOD_DUMPFILE,None],
+    											syscall_flags)
+
+
+
+	#count the number of modules we have to process
+	module_cnt_syscall.wait_check_async(None, async_data.start_callback)
+
 	
+
 	# output_sheet = open(REPORT_DEFAULT_NAME, "w")
 	# #set the global variable that tells exit gracefully to 
 	# # remove this file in case of interrupt/early termination
@@ -95,3 +135,4 @@ def start_cb(start_btn, builder):
 
 #FIXME we need to change the system calls to return asynchronously
 #https://stackoverflow.com/questions/35036122/unable-to-initialize-a-window-and-wait-for-a-process-to-end-in-python-3-gtk-3
+

@@ -2,7 +2,7 @@ import os
 #GTK+ imports
 import gi
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, Gdk, Gio
+from gi.repository import GLib, Gtk, Gdk, Gio
 from os.path import abspath, dirname, join
 import subprocess
 import time

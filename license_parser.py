@@ -18,7 +18,7 @@ def main():
 
     parser = argparse.ArgumentParser(prog="python3 license_parser.py", 
                                     usage="%(prog)s [options]")
-    parser.add_argument('--cli', dest="cli_mode", action="store_true", 
+    parser.add_argument('--cli', dest="cli_mode", action="store_true",
                         required=False, help=MODESELECT_HELPTEXT)
     parser.set_defaults(cli_mode=False)
     #get command line args, if there are any passed
@@ -44,8 +44,10 @@ def main():
         #CLI MODE BELOW -------------------------------------------------------
         print("--- running in terminal mode ---")
         with open(PERLMOD_DUMPFILE) as mod_listfile:
-            mod_listfile.readline()
             for line in mod_listfile:
+                if "Loading internal logger" in line:
+                    #skip the reccommendation for Log::Log4perl
+                    continue
                 free_software = False
                 #parse the name of this perl module from the line
                 pmod_name = parse_pmod_name(line)
@@ -111,14 +113,16 @@ def main():
         builder.add_from_file("lchecker.glade")
         window = builder.get_object("first_screen")
 
+        async_data = Async_data(builder)
+
         #connect our callback functions to the names specified in Glade
         # (names must be an exact match). These functions are defined in
         # gtk_helpers.py
-        builder.connect_signals({"destroy": quit_btn_cb,
+        builder.connect_signals({"destroy": Gtk.main_quit,
                                  "quit_btn_cb": quit_btn_cb,
                                  "next_btn_cb": (next_btn_cb, builder), 
                                  "back_btn_cb": (back_btn_cb, builder), 
-                                 "start_cb":    (start_cb, builder)})
+                                 "start_cb":    (start_cb, builder, async_data)})
 
         window.show_all()
         #alternatively, you can traverse a list of objects --
