@@ -10,7 +10,11 @@ class Async_data:
 
 	def generate_report(self):
 		print(self.num_modules)
-		Gtk.main_quit()
+
+		with open(PERLMOD_DUMPFILE) as mod_listfile:
+			for line in mod_listfile:
+				print(parse_pmod_name(line))
+		
 
 	#MODIFIES: self.num_modules
 	#EFFECTS: kicks of the report generating process.
