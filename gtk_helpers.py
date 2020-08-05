@@ -1,5 +1,6 @@
 from global_definitions import *
 from license_parser import create_modulelist_tempfile, parse_pmod_name
+from license_parser import line_check, parse_perldocs
 #from license_parser import pmodfile_manual_parse
 import asyncio
 
@@ -7,13 +8,14 @@ class Async_data:
 	def __init__(self, gtkbuilder):
 		self.num_modules = -1
 		self.builder = gtkbuilder
+		mod_report_data = []
 
 	def generate_report(self):
 		print(self.num_modules)
-
+		i = 1
 		with open(PERLMOD_DUMPFILE) as mod_listfile:
 			for line in mod_listfile:
-				print(parse_pmod_name(line))
+				pmod_name = parse_pmod_name(line)
 		
 
 	#MODIFIES: self.num_modules
@@ -26,10 +28,51 @@ class Async_data:
 			subprocess.wait_check_finish(result)
 		else:
 			print("error in async wc -l call")
+			print(out)
 			exit_gracefully(None,None)
 		self.generate_report()
 
+	def perldoc_name_check(self, pmod_name):
+		syscall_flags =  Gio.SubprocessFlags.STDOUT_PIPE
+		syscall_flags |= Gio.SubprocessFlags.STDERR_MERGE
+		perldoc_syscall = Gio.Subprocess.new(["perldoc", pmod_name, None],
+    											syscall_flags)
+		#count the number of modules we have to process
+		perldoc_syscall.wait_check_async(None, async_data.pdoc_name_cb, pmod_name)
 
+	def pdoc_name_cb(self, subprocess, result, pmod_name):
+		decode_bytes = False
+		try:
+			[success, out, err] = subprocess.communicate_utf8()
+		except gi.repository.GLib.Error:
+			[success, out, err] = subprocess.communicate()
+			decode_bytes = True
+		if success:
+			#pdoc_content = ""
+			if decode_bytes:
+				temp_bytes = out.get_data()
+				encoding = chardet.detect(temp_bytes)['encoding']
+				pdoc_content = temp_bytes.decode(encoding)
+			else:
+				pdoc_content = out
+
+			subprocess.wait_check_finish(result)
+
+			if pdoc_content == "" or pdoc_content == None:
+				print("ERROR: command\' perldoc "+pmod_name+"\' gave no output..")
+				print(out)
+				exit_gracefully(None, None)
+
+			if no_documentation(pdoc_content):
+				#call a perldoc_fqfn function
+			else:
+				#parse for license data
+
+			
+		else:
+			print("error in perldoc [name] call")
+			print(out)
+			exit_gracefully(None,None)
 		
 
 
@@ -68,16 +111,12 @@ def start_cb(start_btn, builder, async_data):
 	current_module = builder.get_object("processing_text")
 	progress_screen.show()
 
-	#need to count the number of modules we'll be processing for the progress bar
 	num_modules = [-1]
 	syscall_flags =  Gio.SubprocessFlags.STDOUT_PIPE
 	syscall_flags |= Gio.SubprocessFlags.STDERR_MERGE
 	module_cnt_syscall = Gio.Subprocess.new(["wc", "-l", PERLMOD_DUMPFILE,None],
     											syscall_flags)
-
-
-
-	#count the number of modules we have to process
+	#get a count of the number of modules we have to process
 	module_cnt_syscall.wait_check_async(None, async_data.start_callback)
 
 	
