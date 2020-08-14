@@ -2,7 +2,6 @@
 import signal
 import sys
 import argparse
-import chardet
 
 #to make certain imports usable by the license checker file (this file)
 # and the gtk callback functions (gtk_helpers), use:
@@ -114,6 +113,15 @@ def main():
         window = builder.get_object("first_screen")
 
         async_data = Async_data(builder)
+        #read in the module list
+        async_data.read_modulelist_file()
+
+        # Gdk.threads_add_idle(GLib.PRIORITY_DEFAULT_IDLE, 
+        #                 async_data.start_checker)
+
+        #run every 2 seconds
+        Gdk.threads_add_timeout(GLib.PRIORITY_DEFAULT_IDLE, 
+                        2000,async_data.start_checker)
 
         #connect our callback functions to the names specified in Glade
         # (names must be an exact match). These functions are defined in

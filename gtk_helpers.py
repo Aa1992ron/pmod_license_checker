@@ -23,9 +23,22 @@ PDOC_PATH_CHECK = True
 class Async_data:
 	def __init__(self, gtkbuilder):
 		self.num_modules = -1
+		self.module_list = []
 		self.builder = gtkbuilder
 		self.mod_report_data = []
 		self.debug_num_modules_check = []
+		self.start_q = queue.Queue()
+
+	def read_modulelist_file(self):
+		with open(PERLMOD_DUMPFILE) as mod_listfile:
+			for line in mod_listfile:
+				pmod_name = parse_pmod_name(line)
+				self.module_list.append(pmod_name)
+			mod_listfile.close()
+		print("Finished reading file")
+		self.num_modules = len(self.module_list)
+		print(self.num_modules)
+		return
 
 	def check_report_data(self):
 		print("checking array size")
@@ -35,32 +48,27 @@ class Async_data:
 			return True
 
 	def generate_report(self):
-		print(self.num_modules)
-		with open(PERLMOD_DUMPFILE) as mod_listfile:
-			for line in mod_listfile:
-				pmod_name = parse_pmod_name(line)
-				self.perldoc_name_check(pmod_name)
+		for pmod in self.module_list:
+			self.perldoc_name_check(pmod)
+		return False
 
 		# check for the array to be "filled up"
-		glib.timeout_add_seconds(GLib.PRIORITY_DEFAULT,
-							2, self.check_report_data,None)
+		#glib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, self.check_report_data,None)
 
-		print("is timeout_add blocking?")
-		
+		#print("is timeout_add blocking?")
+	
+	def start_checker(self):
+		print("checking")
+		if not self.start_q.empty():
+			return self.generate_report()
+			#return False
+		else:
+			#keep running the check
+			return True
+
 
 	#MODIFIES: self.num_modules
 	#EFFECTS: kicks of the report generating process.
-	def start_callback(self, subprocess, result):
-		[success, out, err] = subprocess.communicate_utf8()
-		if success:
-			module_amt_data = out.split(" ")
-			self.num_modules = int(module_amt_data[0])
-			subprocess.wait_check_finish(result)
-		else:
-			print("error in async wc -l call")
-			print(out)
-			exit_gracefully(None,None)
-		self.generate_report()
 
 	def perldoc_name_check(self, pmod_name):
 		syscall_flags =  Gio.SubprocessFlags.STDOUT_PIPE
@@ -68,7 +76,7 @@ class Async_data:
 		perldoc_syscall = Gio.Subprocess.new(["perldoc", pmod_name, None],
     											syscall_flags)
 		#count the number of modules we have to process
-		perldoc_syscall.wait_check_async(None, self.pdoc_name_cb, 
+		perldoc_syscall.communicate_async(None, None, self.pdoc_name_cb, 
 										pmod_name, PDOC_NAME_CHECK)
 
 	#EFFECTS: gets the result of a subprocess call perldoc [module name]
@@ -78,23 +86,12 @@ class Async_data:
 	#			to get the full path for the given perl module and pass it
 	#			to the manual parse function which opens the actual file.  
 	def pdoc_name_cb(self, subprocess, result, pmod_name, last_try):
-		decode_bytes = False
 
-		try:
-			[success, out, err] = subprocess.communicate_utf8()
-		except gi.repository.GLib.Error:
-			[success, out, err] = subprocess.communicate()
-			decode_bytes = True
+		[success, out, err] = subprocess.communicate_finish(result)
 		if success:
-			#pdoc_content = ""
-			if decode_bytes:
-				temp_bytes = out.get_data()
-				encoding = chardet.detect(temp_bytes)['encoding']
-				pdoc_content = temp_bytes.decode(encoding)
-			else:
-				pdoc_content = out
-
-			subprocess.wait_check_finish(result)
+			temp_bytes = out.get_data()
+			encoding = chardet.detect(temp_bytes)['encoding']
+			pdoc_content = temp_bytes.decode(encoding)
 
 			if pdoc_content == "" or pdoc_content == None:
 				print("ERROR: command\' perldoc "+pmod_name+"\' gave no output..")
@@ -163,15 +160,9 @@ def start_cb(start_btn, builder, async_data):
 	progress_bar.set_fraction(0.0)
 	current_module = builder.get_object("processing_text")
 	progress_screen.show()
-
-	num_modules = [-1]
-	syscall_flags =  Gio.SubprocessFlags.STDOUT_PIPE
-	syscall_flags |= Gio.SubprocessFlags.STDERR_MERGE
-	module_cnt_syscall = Gio.Subprocess.new(["wc", "-l", PERLMOD_DUMPFILE,None],
-    											syscall_flags)
-	#get a count of the number of modules we have to process
-	module_cnt_syscall.wait_check_async(None, async_data.start_callback)
-
+	async_data.start_q.put(1)
+	print("returning from start_cb")
+	return
 	
 
 	# output_sheet = open(REPORT_DEFAULT_NAME, "w")

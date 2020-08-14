@@ -6,6 +6,8 @@ from gi.repository import GLib, Gtk, Gdk, Gio
 from os.path import abspath, dirname, join
 import subprocess
 import time
+import chardet
+import queue
 from subprocess import PIPE
 
 WHERE_AM_I = abspath(dirname(__file__))
