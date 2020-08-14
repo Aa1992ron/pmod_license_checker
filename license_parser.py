@@ -128,7 +128,7 @@ def main():
         #alternatively, you can traverse a list of objects --
         #glade_object_list = builder.get_objects()
         Gtk.main()
-        #process the modules in windowed mode here
+
         os.remove(PERLMOD_DUMPFILE)
         #----------------------------------------------------------------------
     

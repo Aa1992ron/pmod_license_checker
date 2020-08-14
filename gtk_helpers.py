@@ -1,21 +1,51 @@
 from global_definitions import *
 from license_parser import create_modulelist_tempfile, parse_pmod_name
-from license_parser import line_check, parse_perldocs
+from license_parser import line_check, parse_perldocs, no_documentation
 #from license_parser import pmodfile_manual_parse
 import asyncio
+
+PDOC_NAME_CHECK = False
+PDOC_PATH_CHECK = True
+
+#best advice I've found so far -- use
+#gdk_threads_add_idle_full(ui_update_func, user_data)
+#or
+#gdk_threads_add_timeout()
+# https://www.yhi.moe/en/2019/01/23/async-gui-update-in-gtk.html
+
+#error we're getting right now is:
+#     perldoc_syscall = Gio.Subprocess.new(["perldoc", pmod_name, None],
+#	gi.repository.GLib.Error: g-unix-error-quark: Too many open files (0)
+# it seems as though the perldoc command actually opens the file
+
+
 
 class Async_data:
 	def __init__(self, gtkbuilder):
 		self.num_modules = -1
 		self.builder = gtkbuilder
-		mod_report_data = []
+		self.mod_report_data = []
+		self.debug_num_modules_check = []
+
+	def check_report_data(self):
+		print("checking array size")
+		if self.num_modules == len(self.mod_report_data):
+			return False
+		else:
+			return True
 
 	def generate_report(self):
 		print(self.num_modules)
-		i = 1
 		with open(PERLMOD_DUMPFILE) as mod_listfile:
 			for line in mod_listfile:
 				pmod_name = parse_pmod_name(line)
+				self.perldoc_name_check(pmod_name)
+
+		# check for the array to be "filled up"
+		glib.timeout_add_seconds(GLib.PRIORITY_DEFAULT,
+							2, self.check_report_data,None)
+
+		print("is timeout_add blocking?")
 		
 
 	#MODIFIES: self.num_modules
@@ -38,10 +68,18 @@ class Async_data:
 		perldoc_syscall = Gio.Subprocess.new(["perldoc", pmod_name, None],
     											syscall_flags)
 		#count the number of modules we have to process
-		perldoc_syscall.wait_check_async(None, async_data.pdoc_name_cb, pmod_name)
+		perldoc_syscall.wait_check_async(None, self.pdoc_name_cb, 
+										pmod_name, PDOC_NAME_CHECK)
 
-	def pdoc_name_cb(self, subprocess, result, pmod_name):
+	#EFFECTS: gets the result of a subprocess call perldoc [module name]
+	#			on the first try, and perldoc [module fpath] on the
+	#			second (last) try.  If there are no docs then this
+	#			function will make an additional async subprocess call
+	#			to get the full path for the given perl module and pass it
+	#			to the manual parse function which opens the actual file.  
+	def pdoc_name_cb(self, subprocess, result, pmod_name, last_try):
 		decode_bytes = False
+
 		try:
 			[success, out, err] = subprocess.communicate_utf8()
 		except gi.repository.GLib.Error:
@@ -64,10 +102,25 @@ class Async_data:
 				exit_gracefully(None, None)
 
 			if no_documentation(pdoc_content):
-				#call a perldoc_fqfn function
+				if last_try:
+					#FIXME try the manual parse here
+					self.mod_report_data.append(pmod_name+",proprietary?")
+					return
+				else:
+					#FIXME call a perldoc_fqfn function
+					self.mod_report_data.append(pmod_name+",proprietary?")
+					return
 			else:
 				#parse for license data
+				free_software = parse_perldocs(pdoc_content)
 
+				if free_software:
+					self.mod_report_data.append(pmod_name+",free")
+					return
+				else:
+					#FIXME run the manual parse
+					self.mod_report_data.append(pmod_name+",proprietary?")
+					return
 			
 		else:
 			print("error in perldoc [name] call")
