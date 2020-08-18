@@ -99,8 +99,7 @@ def main():
         #----------------------------------------------------------------------
     else:
         print("--- running in gui mode ---")
-        global gui_syscalls
-        gui_syscalls = True
+
         #GUI MODE BELOW -------------------------------------------------------
         #win = Gtk.Window()
         #win.connect("destroy", Gtk.main_quit)
@@ -115,13 +114,20 @@ def main():
         async_data = Async_data(builder)
         #read in the module list
         async_data.read_modulelist_file()
+        #We have to check OS limits for open files,
+        # because it seems as though the perldoc command 
+        # counts as an open file against the OS limit
+        async_data.set_openfile_limit()
+        #async_data.set_max_openfile_limit()
 
-        # Gdk.threads_add_idle(GLib.PRIORITY_DEFAULT_IDLE, 
-        #                 async_data.start_checker)
+        Gdk.threads_add_idle(GLib.PRIORITY_DEFAULT_IDLE, 
+                        async_data.start_checker)
 
-        #run every 2 seconds
-        Gdk.threads_add_timeout(GLib.PRIORITY_DEFAULT_IDLE, 
-                        2000,async_data.start_checker)
+        #run every 1 seconds (debug)
+        # Gdk.threads_add_timeout(GLib.PRIORITY_DEFAULT_IDLE, 
+        #                 1000,async_data.start_checker)
+
+        
 
         #connect our callback functions to the names specified in Glade
         # (names must be an exact match). These functions are defined in

@@ -8,6 +8,9 @@ import subprocess
 import time
 import chardet
 import queue
+import math
+import resource
+import sys
 from subprocess import PIPE
 
 WHERE_AM_I = abspath(dirname(__file__))
@@ -17,9 +20,6 @@ REPORT_DEFAULT_NAME = "pmod_report.csv"
 # report file in the event that the program terminates 
 global report_csv_created
 report_csv_created = False
-
-global gui_syscalls
-gui_syscalls = False
 
 
 def exit_gracefully(sig, frame):
@@ -33,11 +33,3 @@ def exit_gracefully(sig, frame):
 def set_report_csv(exists):
     global report_csv_created
     report_csv_created = exists
-
-def set_gui_syscalls():
-    global gui_syscalls
-    gui_syscalls = True
-
-def get_gui_syscalls():
-    global gui_syscalls
-    return gui_syscalls

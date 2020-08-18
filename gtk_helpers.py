@@ -2,7 +2,7 @@ from global_definitions import *
 from license_parser import create_modulelist_tempfile, parse_pmod_name
 from license_parser import line_check, parse_perldocs, no_documentation
 #from license_parser import pmodfile_manual_parse
-import asyncio
+import threading
 
 PDOC_NAME_CHECK = False
 PDOC_PATH_CHECK = True
@@ -22,13 +22,26 @@ PDOC_PATH_CHECK = True
 
 class Async_data:
 	def __init__(self, gtkbuilder):
+		#gtk objects/variables
+		self.builder = gtkbuilder
+		self.progress_bar = None
+		self.progress_text = None
+		#data processing variables
 		self.num_modules = -1
 		self.module_list = []
-		self.builder = gtkbuilder
+		
 		self.mod_report_data = []
-		self.debug_num_modules_check = []
-		self.start_q = queue.Queue()
 
+		self.start_q = queue.Queue()
+		self.end_q = queue.Queue()
+		#self.chunk_size = -1
+		self.reportgen_thread = None
+
+		self.count_queue = queue.Queue()
+		self.current_module = queue.LifoQueue()
+
+	#REQUIRES: create_modulelist_tempfile has already been called.
+	#		   
 	def read_modulelist_file(self):
 		with open(PERLMOD_DUMPFILE) as mod_listfile:
 			for line in mod_listfile:
@@ -40,6 +53,54 @@ class Async_data:
 		print(self.num_modules)
 		return
 
+	# DESCRIPTION: The OS limits the number of open files,
+	# and the number of processes allowed for any given user. 
+	# Each thread we spawn has the potential to count against
+	# each of these limits, since the 'perldoc' command opens
+	# files to get the module documentation.  
+
+	def set_max_openfile_limit(self):
+		(soft_limit, hard_limit) = resource.getrlimit(resource.RLIMIT_OFILE)
+		resource.setrlimit(resource.RLIMIT_OFILE,
+									[hard_limit-1,hard_limit])
+
+	def set_openfile_limit(self):
+		#we don't want to hit the actual limit of files, 
+		# and in case the user has open files we want to have
+		# a bit of wiggle room
+		wiggle_room = 20
+
+		if self.num_modules == -1:
+			print("must call read_modulelist_file before calling"+
+				  "get_openfile_limit\n", file=sys.stderr)
+			exit(1)
+		file_limit = -1
+		(soft_limit, hard_limit) = resource.getrlimit(resource.RLIMIT_OFILE)
+
+		if self.num_modules >= soft_limit:
+			if self.num_modules >= hard_limit:
+				#for now, print to stderr and exit.  
+				# Implementation for breaking up processing into
+				# chunks to come. FIXME
+				print("Number of perl modules exceeds hard limit"+
+				  "for the number of files allowed to be open at once\n",
+				  file=sys.stderr)
+				exit(1)
+
+			if self.num_modules+wiggle_room < hard_limit:
+				new_soft_limit = self.num_modules+wiggle_room
+				resource.setrlimit(resource.RLIMIT_OFILE,
+									[new_soft_limit,hard_limit])
+			else:
+				resource.setrlimit(resource.RLIMIT_OFILE,
+									[self.num_modules,hard_limit])
+			#double check new soft limit
+			(soft_limit, hard_limit) = resource.getrlimit(resource.RLIMIT_OFILE)
+			print("new soft limit is:"+str(soft_limit))
+			return
+
+
+ 
 	def check_report_data(self):
 		print("checking array size")
 		if self.num_modules == len(self.mod_report_data):
@@ -50,22 +111,50 @@ class Async_data:
 	def generate_report(self):
 		for pmod in self.module_list:
 			self.perldoc_name_check(pmod)
+		pmod_report = open("pmod_report.csv", "w")
+		for result in self.mod_report_data:
+			pmod_report.write(result+"\n")
+		self.end_q.put(1)
 		return False
-
-		# check for the array to be "filled up"
-		#glib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, self.check_report_data,None)
-
-		#print("is timeout_add blocking?")
 	
 	def start_checker(self):
-		print("checking")
+		#print("checking")
 		if not self.start_q.empty():
-			return self.generate_report()
-			#return False
+			print("calling report gen")
+			self.start_q.get(block=False)
+			# Gdk.threads_add_idle(GLib.PRIORITY_DEFAULT_IDLE, 
+   #                      self.end_checker)
+			#calling the function like this will block the main loop
+			self.reportgen_thread = threading.Thread(group=None,
+									target=self.generate_report)
+			self.reportgen_thread.start()
+			return False
 		else:
 			#keep running the check
 			return True
 
+	def end_checker(self):
+		if not self.end_q.empty():
+			self.progress_bar.set_fraction(1)
+			self.progress_text.set_markup("Finished")
+			print("report successfully generated")
+			return False
+		else:
+			if not self.count_queue.empty():
+				#update processing text:
+				if not self.current_module.empty():
+					self.progress_text.set_markup(
+						"Processing module: "+
+						self.current_module.get(block=False))
+				#update the progress bar fraction:
+				self.progress_bar.set_fraction(self.count_queue.qsize()/self.num_modules)
+			else:
+				self.progress_text.set_markup("Processing module list file")
+				self.progress_bar.set_fraction(0.0)
+
+			#print("ary size: "+str()
+			#keep running the check
+			return True
 
 	#MODIFIES: self.num_modules
 	#EFFECTS: kicks of the report generating process.
@@ -101,10 +190,14 @@ class Async_data:
 			if no_documentation(pdoc_content):
 				if last_try:
 					#FIXME try the manual parse here
+					self.count_queue.put(1)
+					self.current_module.put(pmod_name)
 					self.mod_report_data.append(pmod_name+",proprietary?")
 					return
 				else:
 					#FIXME call a perldoc_fqfn function
+					self.count_queue.put(1)
+					self.current_module.put(pmod_name)
 					self.mod_report_data.append(pmod_name+",proprietary?")
 					return
 			else:
@@ -112,10 +205,14 @@ class Async_data:
 				free_software = parse_perldocs(pdoc_content)
 
 				if free_software:
+					self.count_queue.put(1)
+					self.current_module.put(pmod_name)
 					self.mod_report_data.append(pmod_name+",free")
 					return
 				else:
 					#FIXME run the manual parse
+					self.count_queue.put(1)
+					self.current_module.put(pmod_name)
 					self.mod_report_data.append(pmod_name+",proprietary?")
 					return
 			
@@ -156,12 +253,16 @@ def start_cb(start_btn, builder, async_data):
 	win2hide = start_btn.get_toplevel()
 	win2hide.hide()
 	progress_screen = builder.get_object("progress_screen")
-	progress_bar = builder.get_object("progress_bar")
-	progress_bar.set_fraction(0.0)
-	current_module = builder.get_object("processing_text")
+	async_data.progress_bar = builder.get_object("progress_bar")
+	async_data.progress_bar.set_fraction(0.0)
+	async_data.progress_text = builder.get_object("processing_text")
+	async_data.progress_text.set_markup("Processing module list file")
 	progress_screen.show()
+	#putting any item into the start_q will start the main report
+	# generation process
 	async_data.start_q.put(1)
-	print("returning from start_cb")
+	Gdk.threads_add_idle(GLib.PRIORITY_DEFAULT_IDLE, 
+                        async_data.end_checker)
 	return
 	
 
