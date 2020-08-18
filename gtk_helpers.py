@@ -133,6 +133,11 @@ class Async_data:
 			#keep running the check
 			return True
 
+	#EFFECTS: end_checker updates the progress bar throughout the report
+	#			generation process until the full report has been generated
+	#NOTE:	  This function is meant to be run as a periodic check.  As Gdk is
+	#		  currently implemented, we run this in a - Gdk.threads_add_timeout()
+	#		  call
 	def end_checker(self):
 		if not self.end_q.empty():
 			self.progress_bar.set_fraction(1)
