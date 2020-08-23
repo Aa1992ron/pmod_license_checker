@@ -35,10 +35,13 @@ from gtk_helpers import *
 
 def main():
     #print license data:
+    # ------------------------------------------------------------------------------------------
     print("Perl Module License Parser\n  Copyright (C) 2020  Aaron Patrick Spencer")
     print("This program comes with ABSOLUTELY NO WARRANTY; for details type see LICENSE.txt.")
     print("This is free software, and you are welcome to redistribute it ")
     print("under certain conditions; for details see source files or LICENSE.txt")
+    # ------------------------------------------------------------------------------------------
+
     #Help text for command line args
     MODESELECT_HELPTEXT = "Run this program in command-line mode. "
     MODESELECT_HELPTEXT += "Program runs in windowed mode by default."
